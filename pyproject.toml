@@ -1,17 +1,7 @@
-[build-system]
-requires = [ "poetry-core",]
-build-backend = "poetry.core.masonry.api"
-
-[tool.poetry]
+[project]
 name = "funfile"
-version = "1.0.5"
-description = ""
-authors = [ "farfun <1007530194@qq.com>",]
+description = "Add your description here"
 readme = "README.md"
-[[tool.poetry.packages]]
-from = "src"
-include = "*"
-
-[tool.poetry.dependencies]
-python = "^3.8"
-tqdm = "^4.66.5"
+version = "1.0.6"
+requires-python = ">=3.8"
+dependencies = [ "tqdm>=4.66.5",]
