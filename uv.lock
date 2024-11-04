@@ -1,5 +1,5 @@
 version = 1
-requires-python = ">=3.8"
+requires-python = ">=3.7"
 
 [[package]]
 name = "colorama"
@@ -12,7 +12,7 @@ wheels = [
 
 [[package]]
 name = "funfile"
-version = "1.0.8"
+version = "1.0.10"
 source = { virtual = "." }
 dependencies = [
     { name = "funutil" },
