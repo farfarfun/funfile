@@ -1,4 +1,4 @@
-from funfile.compress import zipfile, tarfile
+from funfile.compress import tarfile, zipfile
 
 
 def extractall(archive_path: str, path: str = "."):

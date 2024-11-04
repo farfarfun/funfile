@@ -4,6 +4,10 @@ import time
 from queue import Queue
 from threading import Thread
 
+from funutil import getLogger
+
+logger = getLogger("funfile")
+
 
 class ConcurrentWriteFile:
     def __init__(self, filepath, mode="w", capacity=200, timeout=3):
@@ -38,7 +42,7 @@ class ConcurrentWriteFile:
                         self._flush_size = self._writen_size
                         self.curser_merge()
                 except Exception as e:
-                    pass
+                    logger.error(e)
                 if self._close:
                     break
             fw.flush()
@@ -77,13 +81,13 @@ class ConcurrentWriteFile:
             else:
                 merged[-1][1] = max(merged[-1][1], interval[1])
         self._writen_data = merged
-        with open(self._process_filepath(), 'wb') as fw:
+        with open(self._process_filepath(), "wb") as fw:
             pickle.dump(self._writen_data, fw)
 
     def __enter__(self):
         self._handle = self
         if os.path.exists(self._process_filepath()):
-            with open(self._process_filepath(), 'rb') as fr:
+            with open(self._process_filepath(), "rb") as fr:
                 self._writen_data = pickle.load(fr)
         return self._handle
 
