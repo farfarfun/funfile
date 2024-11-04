@@ -12,14 +12,27 @@ wheels = [
 
 [[package]]
 name = "funfile"
-version = "1.0.7"
+version = "1.0.8"
 source = { virtual = "." }
 dependencies = [
+    { name = "funutil" },
     { name = "tqdm" },
 ]
 
 [package.metadata]
-requires-dist = [{ name = "tqdm", specifier = ">=4.66.5" }]
+requires-dist = [
+    { name = "funutil", specifier = ">=1.0.15" },
+    { name = "tqdm", specifier = ">=4.66.5" },
+]
+
+[[package]]
+name = "funutil"
+version = "1.0.15"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/ee/ae8cc721a7f6c3ce19f74707b40adabe8921bd4e22ed017d758d303e035f/funutil-1.0.15.tar.gz", hash = "sha256:8bdc280f33ae09429a111d8cbe9ee54317cc487f683b0651378de29e42d724d8", size = 17678 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/d8/27/488dd0c1179ad679abe4efc51ab1e86e852a46b7b9f95369ec3896ed10b6/funutil-1.0.15-py3-none-any.whl", hash = "sha256:0a72749740d3c0487760dad1e923c365a03afb446193953dae0fb6a5b69f6e9a", size = 21883 },
+]
 
 [[package]]
 name = "tqdm"
