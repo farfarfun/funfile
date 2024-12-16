@@ -93,9 +93,20 @@ class TarFile(tarfile.TarFile):
             fileobj = FileWrapper(fileobj, progress=self._progress)
         return super(TarFile, self).addfile(tarinfo, fileobj)
 
-    def add(self, name, arcname=None, recursive=True, filter=None, progress=None, *args, **kwargs):
+    def add(
+        self,
+        name,
+        arcname=None,
+        recursive=True,
+        filter=None,
+        progress=None,
+        *args,
+        **kwargs,
+    ):
         self._progress = progress or self._progress or file_tqdm_bar(name)
-        return super(TarFile, self).add(name=name, arcname=arcname, recursive=recursive, filter=filter)
+        return super(TarFile, self).add(
+            name=name, arcname=arcname, recursive=recursive, filter=filter
+        )
 
     def tar_size(self):
         size = 0
@@ -104,7 +115,7 @@ class TarFile(tarfile.TarFile):
         return size
 
 
-open:TarFile = TarFile.open
+open: TarFile = TarFile.open
 
 
 def file_entar(src_path, dst_path=None):
