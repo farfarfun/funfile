@@ -1,6 +1,7 @@
 import os.path
 import pickle
 import time
+import traceback
 from queue import Queue
 from threading import Thread
 
@@ -33,6 +34,8 @@ class ConcurrentWriteFile:
             while True:
                 try:
                     offset, chunk = self._write_queue.get(timeout=self.timeout)
+                    if chunk is None:
+                        continue
                     if offset is not None:
                         fw.seek(offset)
                     self._writen_size += fw.write(chunk)
@@ -42,7 +45,7 @@ class ConcurrentWriteFile:
                         self._flush_size = self._writen_size
                         self.curser_merge()
                 except Exception as e:
-                    logger.error(e)
+                    logger.error(f"write error: {e}:{traceback.format_exc()}")
                 if self._close:
                     break
             fw.flush()
