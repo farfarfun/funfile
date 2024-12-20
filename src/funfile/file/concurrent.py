@@ -2,7 +2,7 @@ import os.path
 import pickle
 import time
 import traceback
-from queue import Queue
+from queue import Empty, Queue
 from threading import Thread
 
 from funutil import getLogger
@@ -33,7 +33,10 @@ class ConcurrentWriteFile:
         with open(self.filepath, self.mode) as fw:
             while True:
                 try:
-                    offset, chunk = self._write_queue.get(timeout=self.timeout)
+                    try:
+                        offset, chunk = self._write_queue.get(timeout=self.timeout)
+                    except Empty:
+                        continue
                     if chunk is None:
                         continue
                     if offset is not None:
