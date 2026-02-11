@@ -5,7 +5,7 @@ import traceback
 from queue import Empty, Queue
 from threading import Thread
 
-from funutil import getLogger
+from funlog import getLogger
 
 logger = getLogger("funfile")
 
