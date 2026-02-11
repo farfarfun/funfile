@@ -2,7 +2,7 @@
 name = "funfile"
 description = "funfile"
 readme = "README.md"
-version = "1.0.21"
+version = "1.0.22"
 requires-python = ">=3.7"
 dependencies = [ "funlog-tau>=1.0.0", "tqdm>=4.66.5",]
 [[project.authors]]
