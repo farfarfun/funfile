@@ -40,26 +40,12 @@ class FileWrapper(object):
         return getattr(self._fileobj, name)
 
     def __del__(self):
-        self._update(0)
+        if self._fileobj is not None:
+            self._update(self._fileobj.tell())
 
 
 class TarFile(tarfile.TarFile):
-    def __init__(
-        self,
-        name=None,
-        mode="r",
-        fileobj=None,
-        format=None,
-        tarinfo=None,
-        dereference=None,
-        ignore_zeros=None,
-        encoding=None,
-        errors="surrogateescape",
-        pax_headers=None,
-        debug=None,
-        errorlevel=None,
-        copybufsize=None,
-    ):
+    def __init__(self, name=None, mode="r", fileobj=None, **kwargs):
         self._progress = None
         if "r" in mode:
             self._progress = file_tqdm_bar(name, prefix="解压")
@@ -67,25 +53,13 @@ class TarFile(tarfile.TarFile):
                 fileobj = FileWrapper(fileobj, progress=self._progress)
             else:
                 fileobj = ProgressFileIO(name, progress=self._progress)
-        super(TarFile, self).__init__(
-            name=name,
-            mode=mode,
-            fileobj=fileobj,
-            format=format,
-            tarinfo=tarinfo,
-            dereference=dereference,
-            ignore_zeros=ignore_zeros,
-            encoding=encoding,
-            errors=errors,
-            pax_headers=pax_headers,
-            debug=debug,
-            errorlevel=errorlevel,
-            copybufsize=copybufsize,
-        )
+        super(TarFile, self).__init__(name=name, mode=mode, fileobj=fileobj, **kwargs)
         if "r" in mode and self._progress is not None:
             self._progress.total = self.tar_size()
 
     def _check_progress_available(self) -> bool:
+        if self._progress is None:
+            return False
         return self._progress.n < self._progress.total
 
     def addfile(self, tarinfo, fileobj=None):
@@ -109,19 +83,16 @@ class TarFile(tarfile.TarFile):
         )
 
     def tar_size(self):
-        size = 0
-        for member in self.getmembers():
-            size += member.size
-        return size
+        return sum(m.size for m in self.getmembers())
 
 
-open: TarFile = TarFile.open
+tar_open: TarFile = TarFile.open
 
 
 def file_entar(src_path, dst_path=None):
     if dst_path is None:
         dst_path = src_path + ".tar"
-    with open(dst_path, "w:xz") as fw:
+    with tar_open(dst_path, "w:xz") as fw:
         fw.add(src_path, arcname=os.path.basename(src_path))
     return dst_path
 
@@ -129,6 +100,6 @@ def file_entar(src_path, dst_path=None):
 def file_detar(src_path, dst_path=None):
     if dst_path is None:
         dst_path = os.path.dirname(src_path)
-    with open(src_path, "r:xz") as fr:
+    with tar_open(src_path, "r:xz") as fr:
         fr.extractall(path=dst_path)
     return os.path.join(dst_path, os.listdir(dst_path)[0])

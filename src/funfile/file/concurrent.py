@@ -38,6 +38,7 @@ class ConcurrentWriteFile:
                     except Empty:
                         continue
                     if chunk is None:
+                        self._write_queue.task_done()
                         continue
                     if offset is not None:
                         fw.seek(offset)
@@ -104,7 +105,7 @@ class ConcurrentWriteFile:
         self.close()
         if os.path.exists(self._process_filepath()):
             os.remove(self._process_filepath())
-        return True
+        return False
 
 
 class ConcurrentFile(ConcurrentWriteFile):

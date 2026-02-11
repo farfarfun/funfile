@@ -4,6 +4,8 @@ from tqdm import tqdm
 
 
 def get_size(path, recursive=False) -> int:
+    if not os.path.exists(path):
+        raise FileNotFoundError(f"Path not found: {path}")
     if os.path.isfile(path):
         return os.path.getsize(path)
     size = 0
