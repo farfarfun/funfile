@@ -2,7 +2,7 @@ import io
 import os
 import tarfile
 
-from funfile.compress.utils import file_tqdm_bar
+from funfile.utils import file_tqdm_bar
 from tqdm import tqdm
 
 

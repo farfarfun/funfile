@@ -2,12 +2,29 @@
 name = "funfile"
 description = "funfile"
 readme = "README.md"
-version = "1.0.24"
+version = "1.0.25"
 requires-python = ">=3.7"
 dependencies = [ "funlog-tau>=1.0.0", "tqdm>=4.66.5",]
 [[project.authors]]
-name = "niuliangtao"
+name = "牛哥"
+email = "niuliangtao@qq.com"
+
+[[project.authors]]
+name = "farfarfun"
 email = "farfarfun@qq.com"
+
+[[project.maintainers]]
+name = "牛哥"
+email = "niuliangtao@qq.com"
+
+[[project.maintainers]]
+name = "farfarfun"
+email = "farfarfun@qq.com"
+
+[project.urls]
+Organization = "https://github.com/farfarfun"
+Repository = "https://github.com/farfarfun/funfile"
+Releases = "https://github.com/farfarfun/funfile/releases"
 
 [tool.setuptools]
 license-files = []
