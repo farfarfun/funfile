@@ -2,7 +2,7 @@
 name = "nltfile"
 description = "nltfile"
 readme = "README.md"
-version = "1.0.33"
+version = "1.0.34"
 requires-python = ">=3.7"
 dependencies = [ "funlog-tau>=1.0.0", "tqdm>=4.66.5",]
 [[project.authors]]
