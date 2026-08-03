@@ -7,5 +7,10 @@ def makedirs(path):
 
 
 def delete(path):
-    if os.path.exists(path):
-        shutil.rmtree(path, ignore_errors=True)
+    try:
+        if os.path.isdir(path) and not os.path.islink(path):
+            shutil.rmtree(path)
+        else:
+            os.remove(path)
+    except FileNotFoundError:
+        pass

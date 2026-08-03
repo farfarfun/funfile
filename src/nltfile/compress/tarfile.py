@@ -3,113 +3,211 @@ import os
 import tarfile
 
 from nltfile.utils import file_tqdm_bar
-from tqdm import tqdm
 
 
 class ProgressFileIO(io.FileIO):
-    def __init__(self, path, progress=None, *args, **kwargs):
-        super(ProgressFileIO, self).__init__(path, *args, **kwargs)
+    def __init__(self, path, mode="r", progress=None, *args, **kwargs):
+        super().__init__(path, mode, *args, **kwargs)
         self._progress = progress
 
-    def read(self, size=None) -> bytes:
-        self._progress.update(self.tell() - self._progress.n)
-        return io.FileIO.read(self, size)
+    def _update_progress(self):
+        current = self.tell()
+        if current > self._progress.n:
+            self._progress.update(current - self._progress.n)
+
+    def read(self, size=-1):
+        data = super().read(size)
+        self._update_progress()
+        return data
+
+    def readinto(self, buffer):
+        size = super().readinto(buffer)
+        self._update_progress()
+        return size
 
 
-class FileWrapper(object):
-    def __init__(self, fileobj, progress: tqdm, *args, **kwargs):
-        super(FileWrapper, self).__init__(*args, **kwargs)
+class ReadFileWrapper:
+    def __init__(self, fileobj, progress):
         self._fileobj = fileobj
         self._progress = progress
 
-    def _update(self, current):
-        if self._progress is not None:
-            if current > self._progress.total:
-                self._progress.total = current
+    def _update_progress(self):
+        current = self._fileobj.tell()
+        if current > self._progress.n:
             self._progress.update(current - self._progress.n)
 
-    def _sync_progress_from_fileobj(self):
-        if self._fileobj is None:
-            return
-        try:
-            self._update(self._fileobj.tell())
-        except (AttributeError, OSError, ValueError):
-            # The wrapped stream may already be closed during interpreter shutdown
-            # or when managed by third-party libraries.
-            return
-
     def read(self, size=-1):
-        self._sync_progress_from_fileobj()
-        return self._fileobj.read(size)
+        data = self._fileobj.read(size)
+        self._update_progress()
+        return data
 
-    def readline(self, size=-1):
-        self._sync_progress_from_fileobj()
-        return self._fileobj.readline(size)
+    def readinto(self, buffer):
+        size = self._fileobj.readinto(buffer)
+        self._update_progress()
+        return size
 
     def __getattr__(self, name):
         return getattr(self._fileobj, name)
 
-    def __del__(self):
-        self._sync_progress_from_fileobj()
+
+class FileWrapper:
+    def __init__(self, fileobj, progress):
+        self._fileobj = fileobj
+        self._progress = progress
+
+    def read(self, size=-1):
+        data = self._fileobj.read(size)
+        if self._progress is not None:
+            self._progress.update(len(data))
+        return data
+
+    def readline(self, size=-1):
+        data = self._fileobj.readline(size)
+        if self._progress is not None:
+            self._progress.update(len(data))
+        return data
+
+    def __getattr__(self, name):
+        return getattr(self._fileobj, name)
+
+
+def _stream_size(fileobj):
+    try:
+        return os.fstat(fileobj.fileno()).st_size
+    except (AttributeError, io.UnsupportedOperation, OSError):
+        try:
+            position = fileobj.tell()
+            fileobj.seek(0, os.SEEK_END)
+            size = fileobj.tell()
+            fileobj.seek(position)
+            return size
+        except (AttributeError, io.UnsupportedOperation, OSError):
+            return None
+
+
+def _validate_members(path, members):
+    root = os.path.realpath(path)
+    for member in members:
+        if not (member.isfile() or member.isdir()):
+            raise tarfile.ExtractError(f"unsafe tar member type: {member.name}")
+        target = os.path.realpath(os.path.join(root, member.name))
+        try:
+            inside_root = os.path.commonpath((root, target)) == root
+        except ValueError:
+            inside_root = False
+        if not inside_root:
+            raise tarfile.ExtractError(f"unsafe tar member path: {member.name}")
+    return members
 
 
 class TarFile(tarfile.TarFile):
-    def __init__(self, name=None, mode="r", fileobj=None, **kwargs):
+    def __init__(self, *args, **kwargs):
         self._progress = None
-        if "r" in mode:
-            self._progress = file_tqdm_bar(name, prefix="解压")
-            if fileobj is not None:
-                fileobj = FileWrapper(fileobj, progress=self._progress)
-            else:
-                fileobj = ProgressFileIO(name, progress=self._progress)
-        super(TarFile, self).__init__(name=name, mode=mode, fileobj=fileobj, **kwargs)
-        if "r" in mode and self._progress is not None:
-            self._progress.total = self.tar_size()
+        self._progress_stream = None
+        super().__init__(*args, **kwargs)
 
-    def _check_progress_available(self) -> bool:
-        if self._progress is None:
-            return False
-        return self._progress.n < self._progress.total
+    @classmethod
+    def open(
+        cls, name=None, mode="r", fileobj=None, bufsize=tarfile.RECORDSIZE, **kwargs
+    ):
+        progress = None
+        progress_stream = None
+        if mode.startswith("r"):
+            total = os.path.getsize(name) if fileobj is None else _stream_size(fileobj)
+            label = name or getattr(fileobj, "name", "")
+            progress = file_tqdm_bar(label, prefix="解压", total=total)
+            if fileobj is None:
+                progress_stream = ProgressFileIO(name, "rb", progress=progress)
+                fileobj = progress_stream
+            else:
+                fileobj = ReadFileWrapper(fileobj, progress)
+
+        try:
+            opened = super().open(
+                name=name, mode=mode, fileobj=fileobj, bufsize=bufsize, **kwargs
+            )
+        except Exception:
+            if progress_stream is not None:
+                progress_stream.close()
+            if progress is not None:
+                progress.close()
+            raise
+
+        opened._progress = progress
+        opened._progress_stream = progress_stream
+        return opened
 
     def addfile(self, tarinfo, fileobj=None):
         if fileobj is not None:
-            fileobj = FileWrapper(fileobj, progress=self._progress)
-        return super(TarFile, self).addfile(tarinfo, fileobj)
+            fileobj = FileWrapper(fileobj, self._progress)
+        return super().addfile(tarinfo, fileobj)
 
-    def add(
-        self,
-        name,
-        arcname=None,
-        recursive=True,
-        filter=None,
-        progress=None,
-        *args,
-        **kwargs,
-    ):
-        self._progress = progress or self._progress or file_tqdm_bar(name)
-        return super(TarFile, self).add(
+    def add(self, name, arcname=None, recursive=True, filter=None, progress=None):
+        if progress is not None:
+            self._progress = progress
+        elif self._progress is None:
+            self._progress = file_tqdm_bar(name, recursive=recursive)
+        return super().add(
             name=name, arcname=arcname, recursive=recursive, filter=filter
         )
 
-    def tar_size(self):
-        return sum(m.size for m in self.getmembers())
+    def extractall(self, path=".", members=None, *, numeric_owner=False, filter=None):
+        if filter is not None:
+            return super().extractall(
+                path=path,
+                members=members,
+                numeric_owner=numeric_owner,
+                filter=filter,
+            )
+        members = self.getmembers() if members is None else list(members)
+        kwargs = {"filter": "data"} if hasattr(tarfile, "data_filter") else {}
+        return super().extractall(
+            path=path,
+            members=_validate_members(path, members),
+            numeric_owner=numeric_owner,
+            **kwargs,
+        )
+
+    def _close_progress(self):
+        if self._progress_stream is not None:
+            self._progress_stream.close()
+            self._progress_stream = None
+        if self._progress is not None:
+            self._progress.close()
+            self._progress = None
+
+    def close(self):
+        try:
+            super().close()
+        finally:
+            self._close_progress()
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        try:
+            return super().__exit__(exc_type, exc_val, exc_tb)
+        finally:
+            self._close_progress()
 
 
-tar_open: TarFile = TarFile.open
-open: TarFile = TarFile.open
+tar_open = TarFile.open
+open = TarFile.open
 
 
 def file_entar(src_path, dst_path=None):
-    if dst_path is None:
-        dst_path = src_path + ".tar"
-    with tar_open(dst_path, "w:xz") as fw:
-        fw.add(src_path, arcname=os.path.basename(src_path))
+    src_path = os.fspath(src_path)
+    dst_path = os.fspath(dst_path) if dst_path is not None else f"{src_path}.tar.xz"
+    with tar_open(dst_path, "w:xz") as archive:
+        archive.add(src_path, arcname=os.path.basename(src_path))
     return dst_path
 
 
 def file_detar(src_path, dst_path=None):
-    if dst_path is None:
-        dst_path = os.path.dirname(src_path)
-    with tar_open(src_path, "r:xz") as fr:
-        fr.extractall(path=dst_path)
-    return os.path.join(dst_path, os.listdir(dst_path)[0])
+    src_path = os.fspath(src_path)
+    dst_path = (
+        os.fspath(dst_path)
+        if dst_path is not None
+        else os.path.dirname(src_path) or "."
+    )
+    with tar_open(src_path, "r:*") as archive:
+        archive.extractall(path=dst_path)
+    return dst_path

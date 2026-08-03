@@ -4,8 +4,9 @@
 
 ## 特性
 
-- 带进度条的 tar/zip 压缩与解压，用法与标准库一致
-- 线程安全的并发文件写入，支持断点续写
+- 带进度条的 tar 压缩与解压，用法与标准库一致
+- 自动识别常见 zip/tar 格式，并阻止 tar 路径穿越
+- 线程安全的后台文件写入，支持指定偏移量
 - pickle 序列化/反序列化的便捷封装
 - 常用文件系统操作（创建目录、删除、复制）
 
@@ -17,8 +18,8 @@ pip install nltfile
 
 ## 依赖
 
-- Python >= 3.7
-- [funutil](https://pypi.org/project/funutil/) >= 1.0.15
+- Python >= 3.10
+- [nltlog](https://pypi.org/project/nltlog/) >= 1.0.0
 - [tqdm](https://pypi.org/project/tqdm/) >= 4.66.5
 
 ## 使用
@@ -31,11 +32,11 @@ pip install nltfile
 from nltfile import tarfile
 
 # 压缩
-with tarfile.open("results.tar", "w|xz") as tar:
+with tarfile.open("results.tar.xz", "w|xz") as tar:
     tar.add("a.txt")
 
 # 解压
-with tarfile.open("results.tar", "r|xz") as tar:
+with tarfile.open("results.tar.xz", "r|xz") as tar:
     tar.extractall("local")
 ```
 
@@ -45,10 +46,10 @@ with tarfile.open("results.tar", "r|xz") as tar:
 from nltfile.compress.tarfile import file_entar, file_detar
 
 # 一键压缩
-file_entar("mydir", "mydir.tar")
+file_entar("mydir", "mydir.tar.xz")
 
 # 一键解压
-file_detar("mydir.tar", "output")
+file_detar("mydir.tar.xz", "output")
 ```
 
 ### zip 解压
@@ -62,7 +63,7 @@ with zipfile.ZipFile("archive.zip") as zf:
 
 ### 通用解压
 
-根据文件后缀自动选择解压方式，支持 `.zip`、`.tar`、`.tar.gz`、`.tgz`、`.tar.bz2`、`.tar.xz`、`.txz`：
+根据文件后缀自动选择解压方式，支持 `.zip`、`.tar`、`.tar.gz`、`.tgz`、`.tar.bz2`、`.tar.xz`、`.txz`。tar 解压默认只接受普通文件和目录，拒绝目标目录之外的路径及链接、设备等特殊成员：
 
 ```python
 from nltfile.compress.allfile import extractall
@@ -72,7 +73,7 @@ extractall("archive.tar.gz", "output")
 
 ### 并发文件写入
 
-线程安全的异步写入，适用于多线程场景。支持指定偏移量写入，并在写入过程中自动记录进度，异常中断后可断点续写：
+线程安全的后台写入，适用于多线程生产数据的场景。离开 `with` 时会等待数据落盘，后台写入错误会传播给调用方：
 
 ```python
 from nltfile import ConcurrentFile
@@ -93,6 +94,8 @@ with ConcurrentFile("output.bin", mode="wb") as fw:
 ### pickle 序列化
 
 便捷的 pickle 读写封装：
+
+> `pickle` 可以执行序列化数据中的代码，只加载可信来源的数据。
 
 ```python
 from nltfile.pickle import dump, load, dumps, loads
@@ -118,7 +121,7 @@ from nltfile.funos import makedirs, delete
 # 递归创建目录（已存在不报错）
 makedirs("path/to/dir")
 
-# 递归删除目录
+# 删除文件或递归删除目录
 delete("path/to/dir")
 ```
 
@@ -141,6 +144,15 @@ size = get_size("large_file.bin")
 size = get_size("mydir", recursive=True)
 ```
 
+### 文件哈希
+
+```python
+from nltfile import file_md5, file_sha256
+
+md5 = file_md5("archive.tar.xz")
+sha256 = file_sha256("archive.tar.xz")
+```
+
 ## 项目结构
 
 ```
@@ -151,10 +163,13 @@ src/nltfile/
 │   ├── core.py            # 文件复制
 │   └── concurrent.py      # 并发文件写入
 ├── compress/
-│   ├── utils.py           # 进度条、文件大小计算
 │   ├── tarfile.py         # 带进度条的 tar 操作
 │   ├── zipfile.py         # zip 操作封装
 │   └── allfile.py         # 通用解压
+├── utils/
+│   ├── size.py            # 文件大小与可读格式
+│   ├── hash.py            # 文件哈希
+│   └── tqdm_bar.py        # 文件进度条
 └── pickle/
     └── core.py            # pickle 序列化封装
 ```

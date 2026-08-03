@@ -1,113 +1,84 @@
-import os.path
-import pickle
-import time
-import traceback
-from queue import Empty, Queue
-from threading import Thread
+from queue import Queue
+from threading import Lock, Thread
 
-from funlog import getLogger
+from nltlog import get_logger
 
-logger = getLogger("nltfile")
+_STOP = object()
 
 
 class ConcurrentWriteFile:
     def __init__(self, filepath, mode="w", capacity=200, timeout=3):
         self.filepath = filepath
         self.mode = mode
-        self.timeout = timeout
+        self.timeout = timeout  # Kept for API compatibility.
         self._write_queue = Queue(capacity)
-        self._close = False
-        self._writen_data = []
-        self._writen_size = 0
-        self._flush_size = 0
-        thread = Thread(target=self._write)
-        thread.start()
+        self._state_lock = Lock()
+        self._error = None
+        self._closed = False
+        self._file = open(filepath, mode)  # noqa: SIM115 - closed by the worker
+        self._thread = Thread(target=self._write, daemon=True)
+        self._thread.start()
+
+    def _raise_if_failed(self):
+        if self._error is not None:
+            raise self._error
 
     def write(self, chunk, offset=None):
-        self._write_queue.put((offset, chunk))
-        size = len(chunk)
-        self.curser_add(offset, size)
-        return size
+        with self._state_lock:
+            if self._closed:
+                raise ValueError("write to closed file")
+            self._raise_if_failed()
+            self._write_queue.put((offset, chunk))
+        return len(chunk)
 
     def _write(self):
-        with open(self.filepath, self.mode) as fw:
-            while True:
-                try:
-                    try:
-                        offset, chunk = self._write_queue.get(timeout=self.timeout)
-                    except Empty:
-                        continue
-                    if chunk is None:
-                        self._write_queue.task_done()
-                        continue
-                    if offset is not None:
-                        fw.seek(offset)
-                    self._writen_size += fw.write(chunk)
-                    self._write_queue.task_done()
-                    if self._writen_size > self._flush_size + 50 * 1024 * 1024:
-                        fw.flush()
-                        self._flush_size = self._writen_size
-                        self.curser_merge()
-                except Exception as e:
-                    logger.error(f"write error: {e}:{traceback.format_exc()}")
-                if self._close:
+        while True:
+            item = self._write_queue.get()
+            try:
+                if item is _STOP:
                     break
-            fw.flush()
-            self._flush_size = self._writen_size
-            self.curser_merge()
+                offset, chunk = item
+                if offset is not None:
+                    self._file.seek(offset)
+                self._file.write(chunk)
+            except Exception as exc:  # noqa: BLE001 - propagate background failures
+                if self._error is None:
+                    self._error = exc
+                try:
+                    get_logger("nltfile").exception(f"write error: {exc}")
+                except Exception:  # noqa: BLE001, S110 - logging must not stop writes
+                    pass
+            finally:
+                self._write_queue.task_done()
+
+        try:
+            self._file.close()
+        except Exception as exc:  # noqa: BLE001 - propagate close failures
+            if self._error is None:
+                self._error = exc
 
     def close(self):
-        self._close = True
+        with self._state_lock:
+            if not self._closed:
+                self._closed = True
+                self._write_queue.put(_STOP)
+        self._write_queue.join()
+        self._thread.join()
+        self._raise_if_failed()
 
     def wait_for_all_done(self):
         self._write_queue.join()
+        self._raise_if_failed()
 
     def empty(self):
         return self._write_queue.empty()
 
-    def curser_add(self, offset, size):
-        if offset is None:
-            return
-        for record in self._writen_data:
-            if record[0] <= offset <= record[1]:
-                if record[1] < offset + size:
-                    record[1] = offset + size
-                return
-        self._writen_data.append([offset, offset + size])
-        return
-
-    def _process_filepath(self):
-        return f"{self.filepath}.process"
-
-    def curser_merge(self):
-        self._writen_data.sort(key=lambda x: x[0])
-        merged = []
-        for interval in self._writen_data:
-            if not merged or interval[0] > merged[-1][1]:
-                merged.append(interval)
-            else:
-                merged[-1][1] = max(merged[-1][1], interval[1])
-        self._writen_data = merged
-        with open(self._process_filepath(), "wb") as fw:
-            pickle.dump(self._writen_data, fw)
-
     def __enter__(self):
-        self._handle = self
-        if os.path.exists(self._process_filepath()):
-            with open(self._process_filepath(), "rb") as fr:
-                self._writen_data = pickle.load(fr)
-        return self._handle
+        return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        while not self.empty():
-            time.sleep(1)
-        self.wait_for_all_done()
         self.close()
-        if os.path.exists(self._process_filepath()):
-            os.remove(self._process_filepath())
         return False
 
 
-class ConcurrentFile(ConcurrentWriteFile):
-    def __init__(self, *args, **kwargs):
-        super(ConcurrentFile, self).__init__(*args, **kwargs)
+ConcurrentFile = ConcurrentWriteFile

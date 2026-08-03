@@ -1,10 +1,14 @@
+[build-system]
+requires = [ "setuptools>=61",]
+build-backend = "setuptools.build_meta"
+
 [project]
 name = "nltfile"
-description = "nltfile"
+description = "Practical file, archive, and serialization utilities"
 readme = "README.md"
-version = "1.0.35"
-requires-python = ">=3.7"
-dependencies = [ "funlog-tau>=1.0.0", "tqdm>=4.66.5",]
+version = "1.0.37"
+requires-python = ">=3.10"
+dependencies = [ "nltlog>=1.0.0", "tqdm>=4.66.5",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -20,11 +24,11 @@ email = "niuliangtao@qq.com"
 [[project.maintainers]]
 name = "farfarfun"
 email = "farfarfun@qq.com"
+
+[project.license]
+file = "LICENSE"
 
 [project.urls]
 Organization = "https://github.com/farfarfun"
 Repository = "https://github.com/farfarfun/nltfile"
 Releases = "https://github.com/farfarfun/nltfile/releases"
-
-[tool.setuptools]
-license-files = []

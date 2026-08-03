@@ -10,10 +10,8 @@ def file_hash(file_path, algorithm):
     """
     hash_func = hashlib.new(algorithm)
     with open(file_path, "rb") as f:
-        chunk = f.read(8192)
-        while chunk:
+        for chunk in iter(lambda: f.read(1024 * 1024), b""):
             hash_func.update(chunk)
-            chunk = f.read(8192)
     return hash_func.hexdigest()
 
 
