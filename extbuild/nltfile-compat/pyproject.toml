@@ -1,0 +1,11 @@
+[build-system]
+requires = ["setuptools>=77"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nltfile"
+version = "1.0.39"
+description = "Compatibility package for funfile"
+requires-python = ">=3.10"
+license = "MIT"
+dependencies = ["funfile>=1.0.39"]

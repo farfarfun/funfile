@@ -1,6 +1,8 @@
-# nltfile
+# funfile
 
 一个实用的 Python 文件操作工具库，提供带进度条的压缩/解压、并发写入、pickle 序列化等功能的增强封装。
+
+原 `nltfile` 已迁回 `funfile`；旧包保留兼容入口，新代码请使用 `funfile`。
 
 ## 特性
 
@@ -13,7 +15,7 @@
 ## 安装
 
 ```bash
-pip install nltfile
+pip install funfile
 ```
 
 ## 依赖
@@ -29,7 +31,7 @@ pip install nltfile
 用法与标准库 `tarfile` 一致，自动显示进度条：
 
 ```python
-from nltfile import tarfile
+from funfile import tarfile
 
 # 压缩
 with tarfile.open("results.tar.xz", "w|xz") as tar:
@@ -43,7 +45,7 @@ with tarfile.open("results.tar.xz", "r|xz") as tar:
 也可以使用快捷函数：
 
 ```python
-from nltfile.compress.tarfile import file_entar, file_detar
+from funfile.compress.tarfile import file_entar, file_detar
 
 # 一键压缩
 file_entar("mydir", "mydir.tar.xz")
@@ -55,7 +57,7 @@ file_detar("mydir.tar.xz", "output")
 ### zip 解压
 
 ```python
-from nltfile import zipfile
+from funfile import zipfile
 
 with zipfile.ZipFile("archive.zip") as zf:
     zf.extractall("output")
@@ -66,7 +68,7 @@ with zipfile.ZipFile("archive.zip") as zf:
 根据文件后缀自动选择解压方式，支持 `.zip`、`.tar`、`.tar.gz`、`.tgz`、`.tar.bz2`、`.tar.xz`、`.txz`。tar 解压默认只接受普通文件和目录，拒绝目标目录之外的路径及链接、设备等特殊成员：
 
 ```python
-from nltfile.compress.allfile import extractall
+from funfile.compress.allfile import extractall
 
 extractall("archive.tar.gz", "output")
 ```
@@ -76,10 +78,10 @@ extractall("archive.tar.gz", "output")
 线程安全的后台写入，适用于多线程生产数据的场景。离开 `with` 时会等待数据落盘，后台写入错误会传播给调用方：
 
 ```python
-from nltfile import ConcurrentFile
+from funfile import ConcurrentFile
 
 with ConcurrentFile("output.txt", mode="w") as fw:
-    fw.write("hello, nltfile.")
+    fw.write("hello, funfile.")
     fw.write("another line.")
 ```
 
@@ -98,7 +100,7 @@ with ConcurrentFile("output.bin", mode="wb") as fw:
 > `pickle` 可以执行序列化数据中的代码，只加载可信来源的数据。
 
 ```python
-from nltfile.pickle import dump, load, dumps, loads
+from funfile.pickle import dump, load, dumps, loads
 
 # 写入文件
 dump({"key": "value"}, "data.pkl")
@@ -116,7 +118,7 @@ obj = loads(raw)
 ### 文件系统工具
 
 ```python
-from nltfile.funos import makedirs, delete
+from funfile.funos import makedirs, delete
 
 # 递归创建目录（已存在不报错）
 makedirs("path/to/dir")
@@ -126,7 +128,7 @@ delete("path/to/dir")
 ```
 
 ```python
-from nltfile.file import copy
+from funfile.file import copy
 
 # 复制文件
 copy("src.txt", "dst.txt")
@@ -135,7 +137,7 @@ copy("src.txt", "dst.txt")
 ### 获取文件/目录大小
 
 ```python
-from nltfile import get_size
+from funfile import get_size
 
 # 获取文件大小（字节）
 size = get_size("large_file.bin")
@@ -147,7 +149,7 @@ size = get_size("mydir", recursive=True)
 ### 文件哈希
 
 ```python
-from nltfile import file_md5, file_sha256
+from funfile import file_md5, file_sha256
 
 md5 = file_md5("archive.tar.xz")
 sha256 = file_sha256("archive.tar.xz")
@@ -156,7 +158,7 @@ sha256 = file_sha256("archive.tar.xz")
 ## 项目结构
 
 ```
-src/nltfile/
+src/funfile/
 ├── __init__.py            # 顶层导出
 ├── funos.py               # 文件系统工具（makedirs, delete）
 ├── file/

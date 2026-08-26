@@ -7,13 +7,13 @@ from pathlib import Path
 from threading import Thread
 from unittest import mock
 
-from nltfile import ConcurrentFile, get_size
-from nltfile.compress import tarfile as nlt_tarfile
-from nltfile.compress.allfile import extractall
-from nltfile.file import copy
+from funfile import ConcurrentFile, get_size
+from funfile.compress import tarfile as fun_tarfile
+from funfile.compress.allfile import extractall
+from funfile.file import copy
 
 
-class NltFileTest(unittest.TestCase):
+class FunFileTest(unittest.TestCase):
     def test_concurrent_file_flushes_and_stops(self):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "output.bin"
@@ -35,7 +35,7 @@ class NltFileTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             target = Path(directory) / "output.bin"
             with (
-                mock.patch("nltfile.file.concurrent.get_logger"),
+                mock.patch("funfile.file.concurrent.get_logger"),
                 self.assertRaises(TypeError),
                 ConcurrentFile(target, mode="wb") as writer,
             ):
@@ -69,7 +69,7 @@ class NltFileTest(unittest.TestCase):
                 info.size = len(content)
                 archive.addfile(info, io.BytesIO(content))
 
-            archive = nlt_tarfile.open(archive_path, "r:*")
+            archive = fun_tarfile.open(archive_path, "r:*")
             stream = archive._progress_stream
             with self.assertRaises(tarfile.ExtractError), archive:
                 archive.extractall(root / "output")
@@ -82,7 +82,7 @@ class NltFileTest(unittest.TestCase):
             pass
         stream.seek(0)
 
-        with nlt_tarfile.open(fileobj=stream, mode="r:*") as archive:
+        with fun_tarfile.open(fileobj=stream, mode="r:*") as archive:
             self.assertEqual(archive.getmembers(), [])
         self.assertFalse(stream.closed)
 

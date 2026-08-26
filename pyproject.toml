@@ -3,10 +3,10 @@ requires = [ "setuptools>=61",]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "nltfile"
+name = "funfile"
 description = "Practical file, archive, and serialization utilities"
 readme = "README.md"
-version = "1.0.38"
+version = "1.0.39"
 requires-python = ">=3.10"
 dependencies = [ "nltlog>=1.0.0", "tqdm>=4.66.5",]
 [[project.authors]]
@@ -30,5 +30,5 @@ file = "LICENSE"
 
 [project.urls]
 Organization = "https://github.com/farfarfun"
-Repository = "https://github.com/farfarfun/nltfile"
-Releases = "https://github.com/farfarfun/nltfile/releases"
+Repository = "https://github.com/farfarfun/funfile"
+Releases = "https://github.com/farfarfun/funfile/releases"

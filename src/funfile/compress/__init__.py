@@ -1,4 +1,4 @@
-from nltfile.utils import file_size, file_tqdm_bar
+from funfile.utils import file_size, file_tqdm_bar
 
 from . import tarfile, zipfile
 

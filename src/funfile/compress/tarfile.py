@@ -2,7 +2,7 @@ import io
 import os
 import tarfile
 
-from nltfile.utils import file_tqdm_bar
+from funfile.utils import file_tqdm_bar
 
 
 class ProgressFileIO(io.FileIO):

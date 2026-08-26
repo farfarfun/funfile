@@ -1,7 +1,7 @@
 import os
 import shutil
 
-from nltfile.compress import tarfile, zipfile
+from funfile.compress import tarfile, zipfile
 
 _TAR_EXTENSIONS = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".txz")
 

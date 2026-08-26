@@ -45,7 +45,7 @@ class ConcurrentWriteFile:
                 if self._error is None:
                     self._error = exc
                 try:
-                    get_logger("nltfile").exception(f"write error: {exc}")
+                    get_logger("funfile").exception(f"write error: {exc}")
                 except Exception:  # noqa: BLE001, S110 - logging must not stop writes
                     pass
             finally:
