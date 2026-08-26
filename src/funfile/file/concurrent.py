@@ -1,7 +1,7 @@
 from queue import Queue
 from threading import Lock, Thread
 
-from nltlog import get_logger
+from farlog import get_logger
 
 _STOP = object()
 

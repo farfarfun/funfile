@@ -21,7 +21,7 @@ pip install funfile
 ## 依赖
 
 - Python >= 3.10
-- [nltlog](https://pypi.org/project/nltlog/) >= 1.0.0
+- [farlog](https://pypi.org/project/farlog/) >= 1.0.0
 - [tqdm](https://pypi.org/project/tqdm/) >= 4.66.5
 
 ## 使用
