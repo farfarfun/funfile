@@ -6,7 +6,7 @@ build-backend = "setuptools.build_meta"
 name = "funfile"
 description = "Practical file, archive, and serialization utilities"
 readme = "README.md"
-version = "1.0.39"
+version = "1.0.40"
 requires-python = ">=3.10"
 dependencies = [ "farlog>=1.0.0", "tqdm>=4.66.5",]
 [[project.authors]]
@@ -32,3 +32,6 @@ file = "LICENSE"
 Organization = "https://github.com/farfarfun"
 Repository = "https://github.com/farfarfun/funfile"
 Releases = "https://github.com/farfarfun/funfile/releases"
+
+[tool.setuptools.package-data]
+funfile = ["py.typed"]
