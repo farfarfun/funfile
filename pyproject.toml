@@ -6,9 +6,11 @@ build-backend = "setuptools.build_meta"
 name = "funfile"
 description = "Practical file, archive, and serialization utilities"
 readme = "README.md"
-version = "1.0.41"
+version = "1.0.42"
 requires-python = ">=3.10"
 dependencies = [ "farlog>=1.0.0", "tqdm>=4.66.5",]
+license = "MIT"
+license-files = ["LICENSE"]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -16,7 +18,6 @@ email = "niuliangtao@qq.com"
 [[project.authors]]
 name = "farfarfun"
 email = "farfarfun@qq.com"
-
 [[project.maintainers]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -24,10 +25,6 @@ email = "niuliangtao@qq.com"
 [[project.maintainers]]
 name = "farfarfun"
 email = "farfarfun@qq.com"
-
-[project.license]
-file = "LICENSE"
-
 [project.urls]
 Organization = "https://github.com/farfarfun"
 Repository = "https://github.com/farfarfun/funfile"
