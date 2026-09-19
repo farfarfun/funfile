@@ -160,6 +160,10 @@ cython_debug/
 .idea/
 
 *.db
+*.rar
+.run/
+logs/
+.vscode/
 hubs/cache
 hubs/book/pkl
 hubs/book/source

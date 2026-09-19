@@ -19,7 +19,7 @@ pip install funfile
 ## 依赖
 
 - Python >= 3.10
-- [farlog](https://pypi.org/project/farlog/) >= 1.0.0
+- [farlog](https://pypi.org/project/farlog/) >= 1.1.7
 - [tqdm](https://pypi.org/project/tqdm/) >= 4.66.5
 
 ## 使用
@@ -174,6 +174,15 @@ src/funfile/
     └── core.py            # pickle 序列化封装
 ```
 
-## 许可证
+---
 
-[MIT License](LICENSE)
+## 关于 farfarfun
+
+[farfarfun](https://github.com/farfarfun) 是一个专注于实用工具库的开源组织，
+涵盖云存储、数据处理、AI、多媒体与开发工具链等方向。
+
+- 🏠 组织主页：<https://github.com/farfarfun>
+- 📦 PyPI：<https://pypi.org/user/niuliangtao/>
+- 📧 联系：farfarfun@qq.com
+
+本项目基于 [MIT](LICENSE) 协议开源。

@@ -1,9 +1,15 @@
 import os
 
 
-def bytes_to_human_readable(size_bytes):
+def bytes_to_human_readable(size_bytes: float) -> str:
     """
-    将字节数转换为人类可读的字符串形式（如 KB、MB、GB 等）
+    将字节数转换为人类可读的字符串。
+
+    Args:
+        size_bytes: 字节数。
+
+    Returns:
+        使用 1024 进制单位的字符串，例如 `1.00KB`。
     """
     if size_bytes == 0:
         return "0B"
@@ -18,7 +24,19 @@ def bytes_to_human_readable(size_bytes):
     return f"{size_bytes:.2f}{units[unit_index]}"
 
 
-def file_size(path, recursive=False) -> int:
+def file_size(path: str | os.PathLike[str], recursive: bool = False) -> int:
+    """返回文件大小，或按需递归累加目录中的文件大小。
+
+    Args:
+        path: 文件或目录路径。
+        recursive: 是否统计子目录。
+
+    Returns:
+        总字节数。
+
+    Raises:
+        FileNotFoundError: 路径不存在。
+    """
     if os.path.isfile(path):
         return os.path.getsize(path)
     try:
