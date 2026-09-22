@@ -21,20 +21,26 @@ def file_hash(file_path: str | PathLike[str], algorithm: str) -> str:
 
 
 def file_md5(filepath: str | PathLike[str]) -> str:
-    """计算文件的 MD5 哈希值。"""
+    """计算文件的 MD5 哈希值。
+
+    Args:
+        filepath: 文件路径。
+    Returns:
+        小写十六进制哈希值。
+    """
     return file_hash(filepath, "md5")
 
 
 def file_sha1(filepath: str | PathLike[str]) -> str:
-    """计算文件的 SHA-1 哈希值。"""
+    """计算文件的 SHA-1 哈希值。参数和返回值同 `file_md5`。"""
     return file_hash(filepath, "sha1")
 
 
 def file_sha256(filepath: str | PathLike[str]) -> str:
-    """计算文件的 SHA-256 哈希值。"""
+    """计算文件的 SHA-256 哈希值。参数和返回值同 `file_md5`。"""
     return file_hash(filepath, "sha256")
 
 
 def file_sha512(filepath: str | PathLike[str]) -> str:
-    """计算文件的 SHA-512 哈希值。"""
+    """计算文件的 SHA-512 哈希值。参数和返回值同 `file_md5`。"""
     return file_hash(filepath, "sha512")

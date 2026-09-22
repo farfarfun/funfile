@@ -7,6 +7,9 @@ def makedirs(path: str | os.PathLike[str]) -> None:
 
     Args:
         path: 要创建的目录路径。
+
+    Returns:
+        None。
     """
     os.makedirs(path, exist_ok=True)
 
@@ -16,6 +19,9 @@ def delete(path: str | os.PathLike[str]) -> None:
 
     Args:
         path: 要删除的路径。
+
+    Returns:
+        None。
     """
     try:
         if os.path.isdir(path) and not os.path.islink(path):

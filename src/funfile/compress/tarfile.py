@@ -142,7 +142,10 @@ def _validate_members(
 
 
 class TarFile(tarfile.TarFile):
-    """在标准库 `TarFile` 上增加进度显示和安全解压。"""
+    """在标准库 `TarFile` 上增加进度显示和安全解压。
+
+    公开方法保持标准库参数语义，并额外支持压缩/解压进度显示。
+    """
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._progress = None
@@ -211,7 +214,17 @@ class TarFile(tarfile.TarFile):
         filter: Any = None,
         progress: Any = None,
     ) -> None:  # type: ignore[override]
-        """将路径加入归档，并显示按字节统计的进度。"""
+        """将路径加入归档，并显示按字节统计的进度。
+
+        Args:
+            name: 要加入的文件或目录。
+            arcname: 归档中的名称；为空时使用原路径名称。
+            recursive: 是否递归加入目录内容。
+            filter: 标准库 tar 成员过滤器。
+            progress: 可选进度条对象。
+        Returns:
+            None。
+        """
         if progress is not None:
             self._progress = progress
         elif self._progress is None:
@@ -228,7 +241,16 @@ class TarFile(tarfile.TarFile):
         numeric_owner: bool = False,
         filter: Any = None,
     ) -> None:
-        """解压归档，未自定义 filter 时拒绝越界路径和特殊成员。"""
+        """解压归档，未自定义 filter 时拒绝越界路径和特殊成员。
+
+        Args:
+            path: 解压目标目录。
+            members: 要解压的成员；为空时解压全部成员。
+            numeric_owner: 是否使用归档中的数字所有者。
+            filter: 标准库成员过滤器。
+        Returns:
+            None。
+        """
         if filter is not None:
             return super().extractall(
                 path=path,

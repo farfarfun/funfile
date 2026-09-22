@@ -28,13 +28,13 @@ class ConcurrentWriteFile:
     ) -> None:
         self.filepath = filepath
         self.mode = mode
-        self.timeout = timeout  # Kept for API compatibility.
+        self.timeout = timeout  # 为兼容旧接口保留。
         self._write_queue: Queue[Any] = Queue(capacity)
         self._state_lock = Lock()
         self._error: Exception | None = None
         self._logging_error: Exception | None = None
         self._closed = False
-        self._file = open(filepath, mode)  # noqa: SIM115 - closed by the worker
+        self._file = open(filepath, mode)  # noqa: SIM115 - 由 worker 关闭
         self._thread = Thread(target=self._write, daemon=True)
         self._thread.start()
 
@@ -71,19 +71,19 @@ class ConcurrentWriteFile:
                 if offset is not None:
                     self._file.seek(offset)
                 self._file.write(chunk)
-            except Exception as exc:  # noqa: BLE001 - propagate background failures
+            except Exception as exc:  # noqa: BLE001 - 传递后台线程错误
                 if self._error is None:
                     self._error = exc
                 try:
                     get_logger("funfile").exception(f"write error: {exc}")
-                except Exception as logging_exc:  # noqa: BLE001
+                except Exception as logging_exc:  # noqa: BLE001 - 记录日志失败也需保留
                     self._logging_error = logging_exc
             finally:
                 self._write_queue.task_done()
 
         try:
             self._file.close()
-        except Exception as exc:  # noqa: BLE001 - propagate close failures
+        except Exception as exc:  # noqa: BLE001 - 传递关闭错误
             if self._error is None:
                 self._error = exc
 
