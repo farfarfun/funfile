@@ -1,7 +1,7 @@
 import io
 import os
 import tarfile
-from collections.abc import Iterable
+from collections.abc import Iterable, Iterator
 from types import TracebackType
 from typing import Any
 
@@ -123,22 +123,53 @@ def _stream_size(fileobj: Any) -> int | None:
             return None
 
 
-def _validate_members(
-    path: str | os.PathLike[str], members: Iterable[tarfile.TarInfo]
-) -> list[tarfile.TarInfo]:
-    members = list(members)
+def _validate_member(root: str, member: tarfile.TarInfo) -> tarfile.TarInfo:
+    """校验单个成员的类型与目标路径，不安全时抛出 `tarfile.ExtractError`。
+
+    Args:
+        root: 解压根目录的真实路径。
+        member: 待校验的归档成员。
+
+    Returns:
+        校验通过的成员本身。
+
+    Raises:
+        tarfile.ExtractError: 成员类型不是普通文件/目录，或目标路径越出 `root`。
+    """
+    if not (member.isfile() or member.isdir()):
+        raise tarfile.ExtractError(f"unsafe tar member type: {member.name}")
+    target = os.path.realpath(os.path.join(root, member.name))
+    try:
+        inside_root = os.path.commonpath((root, target)) == root
+    except ValueError:
+        inside_root = False
+    if not inside_root:
+        raise tarfile.ExtractError(f"unsafe tar member path: {member.name}")
+    return member
+
+
+def _validated_members(
+    path: str | os.PathLike[str],
+    members: Iterable[tarfile.TarInfo | str],
+    archive: tarfile.TarFile,
+) -> Iterator[tarfile.TarInfo]:
+    """逐个校验并产出归档成员。
+
+    必须保持惰性：对 `r|*` 这类不可回退的流式归档，提前把成员读完会把数据流
+    推到末尾，随后解压需要回退定位时就会抛 `tarfile.StreamError`。
+
+    Args:
+        path: 解压目标目录。
+        members: 成员对象或成员名称的可迭代对象。
+        archive: 成员所属的归档，用于按名称解析成员。
+
+    Yields:
+        校验通过的成员。
+    """
     root = os.path.realpath(path)
     for member in members:
-        if not (member.isfile() or member.isdir()):
-            raise tarfile.ExtractError(f"unsafe tar member type: {member.name}")
-        target = os.path.realpath(os.path.join(root, member.name))
-        try:
-            inside_root = os.path.commonpath((root, target)) == root
-        except ValueError:
-            inside_root = False
-        if not inside_root:
-            raise tarfile.ExtractError(f"unsafe tar member path: {member.name}")
-    return members
+        tarinfo = archive.getmember(member) if isinstance(member, str) else member
+        yield _validate_member(root, tarinfo)
 
 
 class TarFile(tarfile.TarFile):
@@ -243,6 +274,8 @@ class TarFile(tarfile.TarFile):
     ) -> None:
         """解压归档，未自定义 filter 时拒绝越界路径和特殊成员。
 
+        成员校验是惰性的，因此 `r|*` 等流式归档同样可用。
+
         Args:
             path: 解压目标目录。
             members: 要解压的成员；为空时解压全部成员。
@@ -258,17 +291,58 @@ class TarFile(tarfile.TarFile):
                 numeric_owner=numeric_owner,
                 filter=filter,
             )
-        members = self.getmembers() if members is None else list(members)
-        members = _validate_members(path, members)
+        validated = _validated_members(path, self if members is None else members, self)
         if hasattr(tarfile, "data_filter"):
             return super().extractall(
                 path=path,
-                members=members,
+                members=validated,
                 numeric_owner=numeric_owner,
                 filter="data",
             )
         return super().extractall(
-            path=path, members=members, numeric_owner=numeric_owner
+            path=path, members=validated, numeric_owner=numeric_owner
+        )
+
+    def extract(
+        self,
+        member: tarfile.TarInfo | str,
+        path: Any = "",
+        set_attrs: bool = True,
+        *,
+        numeric_owner: bool = False,
+        filter: Any = None,
+    ) -> None:
+        """解压单个成员，未自定义 filter 时拒绝越界路径和特殊成员。
+
+        Args:
+            member: 成员对象或成员名称。
+            path: 解压目标目录，默认为当前目录。
+            set_attrs: 是否还原文件属性。
+            numeric_owner: 是否使用归档中的数字所有者。
+            filter: 标准库成员过滤器。
+        Returns:
+            None。
+        """
+        if filter is not None:
+            return super().extract(
+                member,
+                path=path,
+                set_attrs=set_attrs,
+                numeric_owner=numeric_owner,
+                filter=filter,
+            )
+        tarinfo = self.getmember(member) if isinstance(member, str) else member
+        _validate_member(os.path.realpath(path or "."), tarinfo)
+        if hasattr(tarfile, "data_filter"):
+            return super().extract(
+                tarinfo,
+                path=path,
+                set_attrs=set_attrs,
+                numeric_owner=numeric_owner,
+                filter="data",
+            )
+        return super().extract(
+            tarinfo, path=path, set_attrs=set_attrs, numeric_owner=numeric_owner
         )
 
     def _close_progress(self) -> None:

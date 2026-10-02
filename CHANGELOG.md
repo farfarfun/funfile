@@ -1,5 +1,17 @@
 # Changelog
 
+## 未发布
+
+### 修复
+
+- `TarFile.extractall`/`extract` 的成员校验改为惰性，修复流式归档（`r|*`）二次定位报
+  `StreamError` 导致解压失败的问题；`extract` 新增单成员路径越界校验。
+
+### 变更
+
+- CI 改为 `uv sync --locked` + `uv run` 执行测试，新增 `ruff check`/`ruff format --check`
+  lint job，保证依赖可复现并纳入代码风格检查（farfarfun/todo-list#675）。
+
 ## 1.0.43
 
 ### 新增

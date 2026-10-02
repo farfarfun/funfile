@@ -112,6 +112,59 @@ class FunFileTest(unittest.TestCase):
             self.assertFalse((root / "escaped.txt").exists())
             self.assertTrue(stream.closed)
 
+    def test_tar_stream_mode_round_trip(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source = root / "source.txt"
+            source.write_text("content")
+
+            archive_path = root / "stream.tar.xz"
+            with fun_tarfile.open(archive_path, "w|xz") as archive:
+                archive.add(source, arcname=source.name)
+
+            output = root / "output"
+            with fun_tarfile.open(archive_path, "r|xz") as archive:
+                archive.extractall(output)
+            self.assertEqual((output / source.name).read_text(), "content")
+
+    def test_tar_stream_mode_rejects_paths_outside_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            archive_path = root / "unsafe.tar.gz"
+            with tarfile.open(archive_path, "w:gz") as archive:
+                info = tarfile.TarInfo("../escaped.txt")
+                content = b"escaped"
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+
+            with (
+                self.assertRaises(tarfile.ExtractError),
+                fun_tarfile.open(archive_path, "r|gz") as archive,
+            ):
+                archive.extractall(root / "output")
+            self.assertFalse((root / "escaped.txt").exists())
+
+    def test_tar_extract_single_member_checks_destination(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            safe = root / "safe.txt"
+            safe.write_text("safe")
+            archive_path = root / "mixed.tar"
+            with tarfile.open(archive_path, "w") as archive:
+                archive.add(safe, arcname=safe.name)
+                info = tarfile.TarInfo("../escaped.txt")
+                content = b"escaped"
+                info.size = len(content)
+                archive.addfile(info, io.BytesIO(content))
+
+            output = root / "output"
+            with fun_tarfile.open(archive_path, "r:*") as archive:
+                archive.extract("safe.txt", output)
+                self.assertEqual((output / "safe.txt").read_text(), "safe")
+                with self.assertRaises(tarfile.ExtractError):
+                    archive.extract("../escaped.txt", output)
+            self.assertFalse((root / "escaped.txt").exists())
+
     def test_tar_accepts_file_objects(self):
         stream = io.BytesIO()
         with tarfile.open(fileobj=stream, mode="w") as archive:
