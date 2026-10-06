@@ -9,8 +9,8 @@
 
 ### 变更
 
-- CI 改为 `uv sync --locked` + `uv run` 执行测试，新增 `ruff check`/`ruff format --check`
-  lint job，保证依赖可复现并纳入代码风格检查（farfarfun/todo-list#675）。
+- CI 改为 `uv sync` + `uv run` 执行测试，新增 `ruff check`/`ruff format --check`
+  lint job，并纳入代码风格检查（farfarfun/todo-list#675）。
 
 ## 1.0.43
 
@@ -24,7 +24,7 @@
 
 ### 变更
 
-- 构建后端迁移至 Hatchling，并提交 `uv.lock` 以保证依赖可复现。
+- 构建后端迁移至 Hatchling。
 - `farlog` 最低版本提升至 1.1.7。
 
 ### 废弃
