@@ -174,6 +174,35 @@ src/funfile/
     └── core.py            # pickle 序列化封装
 ```
 
+## 开发
+
+开发依赖（`pytest`、`ruff`）定义在 `pyproject.toml` 的 `[dependency-groups].dev` 中，由 `uv` 管理：
+
+```bash
+uv sync
+```
+
+测试与静态检查，命令与 CI（`.github/workflows/test.yml`）保持一致：
+
+```bash
+uv run python -m unittest discover -s tests -v
+uv run ruff check .
+uv run ruff format --check .
+```
+
+`pyproject.toml` 已配置 `testpaths`，也可以用 pytest 跑同一批用例：
+
+```bash
+uv run pytest -q
+```
+
+构建与发布走 `funbuild`，不要手写发布脚本：
+
+```bash
+funbuild install   # 本地构建并安装，验证当前代码可安装（不发布、不打标签）
+funbuild build     # 完整发布流程：递增版本、构建、安装校验、发布 PyPI、推送并打标签
+```
+
 ---
 
 ## 关于 farfarfun
