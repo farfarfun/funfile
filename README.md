@@ -4,8 +4,8 @@
 
 ## 特性
 
-- 带进度条的 tar 压缩与解压，用法与标准库一致
-- 补齐标准库没有的 zstd 支持（`w:zst` / `r:zst`），压缩比接近 xz 而快一个数量级
+- 带进度条的 tar / zip 压缩与解压，用法与标准库一致
+- 补齐标准库没有的 zstd 支持（`w:zst` / `r:zst`），压缩快一个数量级，体积代价视数据而定
 - 自动识别常见 zip/tar 格式，并阻止 tar 路径穿越
 - 线程安全的后台文件写入，支持指定偏移量
 - pickle 序列化/反序列化的便捷封装
@@ -16,7 +16,7 @@
 ```bash
 pip install funfile
 
-# 需要 zstd 时额外装可选依赖
+# Python 3.13 及更早版本用 zstd 时额外装可选依赖
 pip install "funfile[zstd]"
 ```
 
@@ -25,7 +25,8 @@ pip install "funfile[zstd]"
 - Python >= 3.10
 - [farlog](https://pypi.org/project/farlog/) >= 1.1.7
 - [tqdm](https://pypi.org/project/tqdm/) >= 4.66.5
-- 可选：[zstandard](https://pypi.org/project/zstandard/) >= 0.22（仅 zstd 模式需要）
+- 可选：[zstandard](https://pypi.org/project/zstandard/) >= 0.22
+  （仅 Python 3.13 及更早版本用 zstd 时需要；3.14+ 走标准库 `compression.zstd`）
 
 ## 使用
 
@@ -67,7 +68,7 @@ file_entar("mydir", codec="zst")  # -> mydir.tar.zst
 ### zstd 压缩/解压
 
 标准库 `tarfile` 在 Python 3.13 及更早版本没有 zstd 后端，funfile 补上了，
-用法与其他压缩类型一致（需要 `pip install "funfile[zstd]"`）：
+用法与其他压缩类型一致：
 
 ```python
 from funfile import tarfile
@@ -79,21 +80,57 @@ with tarfile.open("results.tar.zst", "r:zst") as tar:
     tar.extractall("local")
 ```
 
+后端自动选择：Python 3.14+ 用标准库 `compression.zstd`（PEP 784），不必装
+`funfile[zstd]`；更早版本回落到第三方 `zstandard`，两者都没有时报
+`CompressionError` 并给出安装提示。无论走哪个后端，默认压缩级别和 `threads`
+参数的行为都一致。
+
 `r:*` 自动探测和 `funfile.compress.allfile.extractall` 都已覆盖 `.tar.zst`/`.tzst`。
 
-为什么值得换：实测 36MB 混合语料端到端，压缩 17.1s 降到 1.1s、解压 0.27s 降到
-0.07s，归档只大约 5%。完整测量方法与数据见 [doc/rust-feasibility.md](doc/rust-feasibility.md) 附录 A。
+为什么值得换：实测 34MB 源码树，压缩 9.7s 降到 0.8s，解压也快 3～4 倍。代价是
+归档更大，而且大多少**强依赖数据的可压缩性**——换 codec 前先看自己的数据属于哪一类：
+
+| 数据 | zst 相对 xz 的体积 |
+| --- | --- |
+| 大量不可压缩内容（已压缩的图片、模型权重） | +9% |
+| 源码树 | +22% |
+| 高度重复的文本（日志、JSON 导出） | +41% |
+
+这组数字可以用 `python benchmarks/zstd_vs_xz.py` 复现，完整分析见
+[doc/rust-feasibility.md](doc/rust-feasibility.md) 附录 A。
 
 一个限制：`|` 流式模式不支持 zstd（`w|zst` 会报 `CompressionError`）。标准库把
 压缩类型硬编码在私有类 `_Stream` 里，无法从子类扩展。
 
-### zip 解压
+### zip 压缩/解压（带进度条）
+
+用法与标准库 `zipfile` 一致，`extractall`、`extract`、`write`、`writestr`
+都会显示按字节统计的进度：
 
 ```python
 from funfile import zipfile
 
+# 解压
 with zipfile.ZipFile("archive.zip") as zf:
     zf.extractall("output")
+
+# 压缩，多次 write 的总量会累加
+with zipfile.ZipFile("archive.zip", "w") as zf:
+    zf.write("a.txt")
+    zf.write("b.txt")
+```
+
+进度按**未压缩字节数**统计。zip 的中央目录在文件末尾，读成员时会在文件里来回
+定位，底层读取位置并不单调递增，用它做进度会来回跳。
+
+只读元数据不会创建进度条，`namelist()`、`infolist()`、`read()` 的行为与标准库完全一致。
+想复用自己的进度条就传 `progress=`，这种情况下 funfile 不会替你关闭它：
+
+```python
+from tqdm import tqdm
+
+with tqdm(total=total_bytes) as bar, zipfile.ZipFile("archive.zip") as zf:
+    zf.extractall("output", progress=bar)
 ```
 
 ### 通用解压

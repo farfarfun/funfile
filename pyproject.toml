@@ -6,7 +6,7 @@ build-backend = "hatchling.build"
 name = "funfile"
 description = "Practical file, archive, and serialization utilities"
 readme = "README.md"
-version = "1.0.45"
+version = "1.0.46"
 requires-python = ">=3.10"
 dependencies = [ "farlog>=1.1.7", "tqdm>=4.66.5",]
 license = "MIT"
@@ -39,7 +39,7 @@ Releases = "https://github.com/farfarfun/funfile/releases"
 packages = ["src/funfile"]
 
 [dependency-groups]
-dev = [ "pytest>=8.0.0", "ruff>=0.6.0", "zstandard>=0.22",]
+dev = [ "mypy>=1.11", "pytest>=8.0.0", "ruff>=0.6.0", "zstandard>=0.22",]
 
 [tool.ruff]
 target-version = "py310"
@@ -49,6 +49,22 @@ src = [ "src",]
 select = [ "E", "F", "I", "UP", "B", "SIM", "RUF", "BLE", "PYI",]
 # RUF001-003：docstring 与注释使用中文，全角标点是有意为之。
 ignore = [ "RUF001", "RUF002", "RUF003",]
+
+[tool.mypy]
+# 按支持的最低版本检查：用到 3.11+ 才有的标准库成员时能当场发现。
+python_version = "3.10"
+files = [ "src/funfile", "tests", "benchmarks",]
+# zstandard 没有随包分发类型信息。
+ignore_missing_imports = true
+disallow_untyped_defs = true
+warn_redundant_casts = true
+# 不开 warn_unused_ignores：`zstopen` 的 override 压制只在 3.14 上需要，
+# 开了会让低版本解释器上的检查反过来失败。
+
+[[tool.mypy.overrides]]
+# 测试方法不标 `-> None`，但方法体照常检查。
+module = [ "test_funfile",]
+disallow_untyped_defs = false
 
 [tool.pytest.ini_options]
 testpaths = [ "tests",]

@@ -151,7 +151,8 @@ Python 对象，不是 funfile 的内部状态。这种 duck-typing 协作是动
 class ProgressFileIO(io.FileIO):   # 作为 fileobj 传给标准库 tarfile
 ```
 
-`ReadFileWrapper` / `FileWrapper` 还通过 `__getattr__` 做动态代理转发未知属性。
+`ProgressReader`（`funfile/utils/progress.py`，当时叫 `ReadFileWrapper` / `FileWrapper`，
+后已合并）还通过 `__getattr__` 做动态代理转发未知属性。
 这套机制的全部意义就是「骗过标准库 tarfile 的鸭子类型检查」。Rust 侧没有要骗的对象。
 
 **综合**：方案 B 的终局是一个「Rust 壳 + 必须保留的 Python 实现」的混合体——
@@ -247,8 +248,9 @@ CI 在 Python 3.10/3.12 两个版本上跑 `unittest` + `ruff`。
 - 压缩侧确实存在 Python 硬天花板：**CPython 的 `lzma` 模块不暴露多线程编码**
   （已验证：`LZMACompressor` 无 `threads` 参数，模块内无任何 MT 常量），
   而 xz 本身支持 `lzma_stream_encoder_mt`。这是标准库的能力缺口。
-- 但打破天花板最划算的手段是 **zstd**：压缩快 11x、解压快 8x、体积只大 4.5%，
-  成本是一个 pip 依赖 + 约 40 行 Python。
+- 但打破天花板最划算的手段是 **zstd**：压缩快 11x、解压快 8x，成本是一个 pip 依赖
+  （Python 3.14+ 连依赖都不要，走标准库 `compression.zstd`）+ 约 40 行 Python。
+  体积代价本附录测得 +4.5%，但这个数字**强依赖语料**，不要外推，见 A6。
 - **Rust 在编解码层买不到任何东西**：Rust 的 `xz2` / `zstd` / `flate2` crate 都是
   FFI 到 Python 已经绑定的同一批 C 库（liblzma / libzstd / zlib）。写 Rust 编解码扩展
   等于重新实现 `python-zstandard`，算法层面零增益。
@@ -357,7 +359,8 @@ with funtar.open(fileobj=w, mode="w|") as tar:
 2) funfile.compress.tarfile 同一个流: ❌ UnsupportedOperation: seek
 ```
 
-成因：`ReadFileWrapper._update_progress()` 无条件调用 `self._fileobj.tell()`。
+成因：`ReadFileWrapper._update_progress()`（现为 `ProgressReader`）无条件调用
+`self._fileobj.tell()`。
 同文件的 `_stream_size()`（第 112–123 行）已经对不可 seek 流做了防御并返回 `None`，
 但 `_update_progress` 没有——两处对同一前提的处理不一致。
 
@@ -401,5 +404,50 @@ A3/A4 测的是**纯编解码**（内存进内存出）。实现落地后用 `fi
 - **解压收益比预估更小**：端到端 3.9x，低于纯编解码的 8x。这正是 A4 结论的直接验证——
   `file_detar` 要把 36MB 写回磁盘，写盘成为瓶颈，codec 再快也摊薄了。
 
-所以对外的准确说法是：**压缩快一个数量级，解压快数倍，体积大约 5%**。
+所以对外的准确说法是：**压缩快一个数量级，解压快数倍，体积代价视语料而定**。
 把纯编解码的微基准数字直接当成用户可感知收益会高估解压、低估压缩。
+
+## A6. 修正：体积代价强依赖语料，+5% 不能外推
+
+补充日期：2026-10-13（与附录 A 同日复核）。本节数字由
+[`benchmarks/zstd_vs_xz.py`](../benchmarks/zstd_vs_xz.py) 产出，可直接重跑。
+
+上面所有「体积只大 4.5%／5%」的数字都是在 A 节那份 **1/3 随机字节** 的混合语料上测的。
+随机数据任何 codec 都压不动，它给归档设了一个体积地板，把 xz 和 zstd 的真实差距
+按比例稀释了。统一用 `xz preset=6` vs `zstd level=12`、三份约 30MB 语料重测：
+
+| 语料 | 原始 | xz 产物 | xz 耗时 | zst 产物 | zst 耗时 | zst 相对体积 |
+|---|---|---|---|---|---|---|
+| 混合语料（1/3 随机，即 A 节用的） | 29.9 MB | 14.04 MB | 15.6s | 15.26 MB | 0.9s | **+9%** |
+| 源码树 | 33.6 MB | 5.75 MB | 9.7s | 7.01 MB | 0.8s | **+22%** |
+| 半重复 JSON 日志 | 30.0 MB | 1.64 MB | 5.6s | 2.32 MB | 0.5s | **+41%** |
+
+速度优势在三份语料上都成立（10～17x），**体积代价则相差 4.5 倍**。
+
+三条结论：
+
+1. **对外文档不要给单一百分比**，要给区间和语料分类。README 与 `file_entar`
+   的 docstring 已按上表改写。
+2. **基准语料的构成决定结论**，评测压缩时随机数据的占比必须显式声明，
+   否则测出来的是地板高度而不是 codec 差异。
+3. **「高度重复」语料要小心做**：用完全相同的行重复 N 次，两个 codec 都能压到
+   接近 0，zstd 甚至反而更小——那测的还是地板。上表那份是模板固定、字段随机变化的
+   日志行，才测出真实差距。
+
+### 默认级别为什么取 12
+
+同一份源码树语料上的级别扫描（对比 xz preset=6 的 5.75 MB / 9.7s）：
+
+| zstd level | 产物 | 耗时 | 相对 xz |
+|---|---|---|---|
+| 3（zstd 自身默认） | 7.91 MB | 0.1s | +38% |
+| 6 | 7.23 MB | 0.3s | +26% |
+| 9 | 7.08 MB | 0.4s | +23% |
+| **12（funfile 默认）** | **7.01 MB** | **0.9s** | **+22%** |
+| 15 | 6.97 MB | 2.9s | +21% |
+| 19 | 6.26 MB | 8.8s | +9% |
+
+取 12 而不是 9：两者在源码树上几乎等价（23% vs 22%），但在上面那份日志语料上
+level=9 还差 47%、level=12 已到 41%。12 从不更差、有时明显更好，代价是 30MB
+量级多半秒。取 12 而不是 19：19 虽然能收窄到 +9%，但 8.8s 已经接近 xz 本身的
+9.7s，换 codec 的理由就不存在了。

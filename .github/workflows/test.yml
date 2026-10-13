@@ -12,7 +12,7 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        python-version: ["3.10", "3.12"]
+        python-version: ["3.10", "3.11", "3.12", "3.13", "3.14"]
     env:
       UV_PYTHON: ${{ matrix.python-version }}
     steps:
@@ -22,6 +22,24 @@ jobs:
       - run: uv sync
       - run: uv run python -V
       - run: uv run python -m unittest discover -s tests -v
+
+  # 不装任何可选依赖，专门覆盖「没有 zstd 后端」的分支：dev 组里有 zstandard，
+  # 上面的 test job 永远走不到报错提示那条路。
+  # 固定 3.12：3.14 起标准库自带 zstd，装不装 zstandard 都有后端。
+  test-no-extras:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      UV_PYTHON: "3.12"
+    steps:
+      - uses: actions/checkout@v4
+      # astral-sh/setup-uv v6
+      - uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e
+      - run: uv sync --no-group dev
+      # 这里直接用 venv 里的解释器，不走 `uv run`：后者会按默认分组重新同步，
+      # 把刚排除掉的 zstandard 又装回来，这个 job 就白测了。
+      - run: .venv/bin/python -c "import importlib.util as u; assert u.find_spec('zstandard') is None"
+      - run: .venv/bin/python -m unittest discover -s tests -v
 
   lint:
     runs-on: ubuntu-latest
@@ -35,3 +53,4 @@ jobs:
       - run: uv sync
       - run: uv run ruff check .
       - run: uv run ruff format --check .
+      - run: uv run mypy

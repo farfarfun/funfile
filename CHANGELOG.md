@@ -1,5 +1,53 @@
 # Changelog
 
+## 1.0.46
+
+### 新增
+
+- zstd 后端自动选择：Python 3.14 起用标准库 `compression.zstd`（PEP 784），
+  更早版本回落第三方 `zstandard`。3.14 及以上不装 `funfile[zstd]` 也能用 zst，
+  且压缩级别默认值与 `threads` 参数不随解释器版本变化。
+- `ZipFile` 支持进度条：`extractall`/`extract`/`write`/`writestr` 都按未压缩
+  字节数显示进度，并接受 `progress=` 复用调用方的进度条。只读元数据的
+  `namelist()`/`infolist()` 不会创建进度条。
+- `file_entar` 新增 `**kwargs`，透传压缩参数（`zst` 收 `level`/`threads`，
+  `xz` 收 `preset`，`gz`/`bz2` 收 `compresslevel`）。
+- 新增 `tarfile.read_mode_for()` 与 `tarfile.ZSTD_SUFFIXES`，按后缀推导读取模式。
+- 新增 `funfile.utils.progress` 模块，导出 `ProgressReader`/`ProgressWriter`。
+- 新增 `benchmarks/zstd_vs_xz.py`，README 与文档里的压缩数字可直接复现。
+
+### 修复
+
+- `TarFile.add` 对同一归档多次调用时，自建进度条的 `total` 只停留在首次调用的
+  路径上，进度会冲过 100%；现在按调用累加。
+- 读取 zstd 归档改走显式的 `r:zst`：`r:*` 的探测循环会把 `CompressionError`
+  吞掉换成泛化的 `ReadError`，「安装 funfile[zstd]」这条可执行提示会丢失。
+  `file_detar` 与 `allfile.extractall` 都已改用 `read_mode_for()`。
+- `allfile.extractall` 补齐 `.taz`/`.tbz`/`.tbz2`/`.tb2` 等常见缩写后缀，
+  此前这些归档会被当作不支持的格式。
+- `ConcurrentWriteFile.write` 把阻塞的入队移出状态锁：此前一个被满队列挡住的
+  写入会把其他线程的 `write()` 和 `close()` 一起堵在锁上（16 线程 / capacity=4
+  实测 283ms → 51ms）。同时用在途写入计数让 `close()` 等待已受理的写入落地，
+  避免结束标记插到数据前面导致丢写。
+- `ProgressFileIO` 在 `progress=None` 时不再抛 `AttributeError`。
+
+### 变更
+
+- 更正压缩体积的说法：此前「zst 比 xz 大约 5%」是单一语料的结论，不能外推。
+  改为按语料分类给区间（30MB 量级实测）：大量不可压缩内容 +9%、源码树 +22%、
+  高重复文本 +41%。`ZSTD_DEFAULT_LEVEL = 12` 的取值理由也补上了实测依据。
+  README、`file_entar` docstring 与 `doc/rust-feasibility.md`（新增 A6 节）同步。
+- 内部的 `ReadFileWrapper` 与 `FileWrapper` 合并为 `utils.progress.ProgressReader`
+  （以 `absolute=` 区分按绝对位置还是按累加计数）。两者此前未在文档中公开。
+- CI 测试矩阵补齐 Python 3.11/3.13/3.14；新增不装任何可选依赖的 job，覆盖
+  「没有 zstd 后端」的报错分支；lint job 纳入 `mypy`。
+- 新增 mypy 配置，按最低支持版本 3.10 检查。
+
+### 废弃
+
+- `ConcurrentWriteFile` 的 `timeout` 参数：一直不生效，显式传入会触发
+  `DeprecationWarning`，将在 2.0 移除。
+
 ## 1.0.45
 
 ### 变更
