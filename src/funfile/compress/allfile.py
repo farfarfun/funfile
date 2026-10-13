@@ -4,6 +4,7 @@ import shutil
 from funfile.compress import tarfile, zipfile
 
 _TAR_EXTENSIONS = (".tar", ".tar.gz", ".tgz", ".tar.bz2", ".tar.xz", ".txz")
+_ZSTD_EXTENSIONS = (".tar.zst", ".tzst")
 
 
 def extractall(
@@ -17,12 +18,18 @@ def extractall(
 
     Raises:
         shutil.ReadError: 归档格式不受支持。
+        tarfile.CompressionError: 解压 `.tar.zst`/`.tzst` 但未安装 `zstandard`。
     """
     archive_path = os.fspath(archive_path)
     lower_path = archive_path.lower()
     if lower_path.endswith(".zip"):
         with zipfile.ZipFile(archive_path) as zf:
             zf.extractall(path=path)
+    elif lower_path.endswith(_ZSTD_EXTENSIONS):
+        # 扩展名已经说明是 zstd，显式指定压缩类型而不是交给 `r:*` 逐个探测，
+        # 这样未安装 zstandard 时能直接报出可执行的提示。
+        with tarfile.open(archive_path, "r:zst") as tf:
+            tf.extractall(path=path)
     elif lower_path.endswith(_TAR_EXTENSIONS):
         with tarfile.open(archive_path, "r:*") as tf:
             tf.extractall(path=path)

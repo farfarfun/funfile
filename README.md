@@ -5,6 +5,7 @@
 ## 特性
 
 - 带进度条的 tar 压缩与解压，用法与标准库一致
+- 补齐标准库没有的 zstd 支持（`w:zst` / `r:zst`），压缩比接近 xz 而快一个数量级
 - 自动识别常见 zip/tar 格式，并阻止 tar 路径穿越
 - 线程安全的后台文件写入，支持指定偏移量
 - pickle 序列化/反序列化的便捷封装
@@ -14,6 +15,9 @@
 
 ```bash
 pip install funfile
+
+# 需要 zstd 时额外装可选依赖
+pip install "funfile[zstd]"
 ```
 
 ## 依赖
@@ -21,6 +25,7 @@ pip install funfile
 - Python >= 3.10
 - [farlog](https://pypi.org/project/farlog/) >= 1.1.7
 - [tqdm](https://pypi.org/project/tqdm/) >= 4.66.5
+- 可选：[zstandard](https://pypi.org/project/zstandard/) >= 0.22（仅 zstd 模式需要）
 
 ## 使用
 
@@ -52,6 +57,36 @@ file_entar("mydir", "mydir.tar.xz")
 file_detar("mydir.tar.xz", "output")
 ```
 
+`file_entar` 可以用 `codec` 选择压缩算法（`tar`、`gz`、`bz2`、`xz`、`zst`），
+默认 `xz`。省略 `dst_path` 时按 codec 自动拼接后缀：
+
+```python
+file_entar("mydir", codec="zst")  # -> mydir.tar.zst
+```
+
+### zstd 压缩/解压
+
+标准库 `tarfile` 在 Python 3.13 及更早版本没有 zstd 后端，funfile 补上了，
+用法与其他压缩类型一致（需要 `pip install "funfile[zstd]"`）：
+
+```python
+from funfile import tarfile
+
+with tarfile.open("results.tar.zst", "w:zst") as tar:
+    tar.add("mydir")
+
+with tarfile.open("results.tar.zst", "r:zst") as tar:
+    tar.extractall("local")
+```
+
+`r:*` 自动探测和 `funfile.compress.allfile.extractall` 都已覆盖 `.tar.zst`/`.tzst`。
+
+为什么值得换：实测 36MB 混合语料端到端，压缩 17.1s 降到 1.1s、解压 0.27s 降到
+0.07s，归档只大约 5%。完整测量方法与数据见 [doc/rust-feasibility.md](doc/rust-feasibility.md) 附录 A。
+
+一个限制：`|` 流式模式不支持 zstd（`w|zst` 会报 `CompressionError`）。标准库把
+压缩类型硬编码在私有类 `_Stream` 里，无法从子类扩展。
+
 ### zip 解压
 
 ```python
@@ -63,7 +98,7 @@ with zipfile.ZipFile("archive.zip") as zf:
 
 ### 通用解压
 
-根据文件后缀自动选择解压方式，支持 `.zip`、`.tar`、`.tar.gz`、`.tgz`、`.tar.bz2`、`.tar.xz`、`.txz`。tar 解压默认只接受普通文件和目录，拒绝目标目录之外的路径及链接、设备等特殊成员：
+根据文件后缀自动选择解压方式，支持 `.zip`、`.tar`、`.tar.gz`、`.tgz`、`.tar.bz2`、`.tar.xz`、`.txz`、`.tar.zst`、`.tzst`。tar 解压默认只接受普通文件和目录，拒绝目标目录之外的路径及链接、设备等特殊成员：
 
 ```python
 from funfile.compress.allfile import extractall

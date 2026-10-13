@@ -6,11 +6,16 @@ build-backend = "hatchling.build"
 name = "funfile"
 description = "Practical file, archive, and serialization utilities"
 readme = "README.md"
-version = "1.0.43"
+version = "1.0.44"
 requires-python = ">=3.10"
 dependencies = [ "farlog>=1.1.7", "tqdm>=4.66.5",]
 license = "MIT"
 license-files = ["LICENSE"]
+
+[project.optional-dependencies]
+# zstd 压缩/解压。标准库 tarfile 在 Python 3.13 及更早版本没有 zstd 后端，
+# 故作为可选依赖，不装则仅 zst 模式不可用。
+zstd = [ "zstandard>=0.22",]
 [[project.authors]]
 name = "牛哥"
 email = "niuliangtao@qq.com"
@@ -34,7 +39,7 @@ Releases = "https://github.com/farfarfun/funfile/releases"
 packages = ["src/funfile"]
 
 [dependency-groups]
-dev = [ "pytest>=8.0.0", "ruff>=0.6.0",]
+dev = [ "pytest>=8.0.0", "ruff>=0.6.0", "zstandard>=0.22",]
 
 [tool.ruff]
 target-version = "py310"

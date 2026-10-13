@@ -3,9 +3,23 @@ import os
 import tarfile
 from collections.abc import Iterable, Iterator
 from types import TracebackType
-from typing import Any
+from typing import Any, ClassVar
 
 from funfile.utils import file_tqdm_bar
+
+# zstd 默认级别。选 12 而不是 zstd 自身的默认值 3，是为了贴近既有 xz 用户在意的
+# 压缩比：实测 127.8MB 混合语料下 level=12 得到 1.93x，接近 xz preset=6 的 2.02x，
+# 而纯编解码吞吐是后者的 11 倍。详见 doc/rust-feasibility.md 附录 A。
+ZSTD_DEFAULT_LEVEL = 12
+
+# `file_entar` 支持的压缩算法及其归档后缀。
+CODEC_SUFFIXES = {
+    "tar": ".tar",
+    "gz": ".tar.gz",
+    "bz2": ".tar.bz2",
+    "xz": ".tar.xz",
+    "zst": ".tar.zst",
+}
 
 
 class ProgressFileIO(io.FileIO):
@@ -49,29 +63,45 @@ class ProgressFileIO(io.FileIO):
 class ReadFileWrapper:
     """为已打开的二进制文件增加解压读取进度。
 
+    `r|*` 流式模式允许传入管道、socket、HTTP 响应体等不可定位的流，标准库对此是
+    支持的，因此进度更新不能假设 `tell()` 一定可用：可定位时按绝对位置更新，
+    否则退化为累加已读字节数。
+
     Args:
-        fileobj: 可读取、定位的二进制文件对象。
+        fileobj: 可读取的二进制文件对象，不要求支持定位。
         progress: 提供 `n` 和 `update()` 的进度条。
     """
 
     def __init__(self, fileobj: Any, progress: Any) -> None:
         self._fileobj = fileobj
         self._progress = progress
+        self._read_bytes = 0
+        self._seekable = self._probe_seekable()
+
+    def _probe_seekable(self) -> bool:
+        """探测底层流能否 `tell()`,不可定位时返回 False。"""
+        try:
+            self._fileobj.tell()
+        except (AttributeError, io.UnsupportedOperation, OSError):
+            return False
+        return True
 
     def _update_progress(self) -> None:
-        current = self._fileobj.tell()
+        current = self._fileobj.tell() if self._seekable else self._read_bytes
         if current > self._progress.n:
             self._progress.update(current - self._progress.n)
 
     def read(self, size: int = -1) -> bytes:
         """读取字节并同步进度。"""
         data = self._fileobj.read(size)
+        self._read_bytes += len(data)
         self._update_progress()
         return data
 
     def readinto(self, buffer: Any) -> int | None:
         """读取到缓冲区并同步进度。"""
         size = self._fileobj.readinto(buffer)
+        self._read_bytes += size or 0
         self._update_progress()
         return size
 
@@ -173,10 +203,17 @@ def _validated_members(
 
 
 class TarFile(tarfile.TarFile):
-    """在标准库 `TarFile` 上增加进度显示和安全解压。
+    """在标准库 `TarFile` 上增加进度显示、安全解压和 zstd 支持。
 
     公开方法保持标准库参数语义，并额外支持压缩/解压进度显示。
     """
+
+    # 在标准库的压缩类型之外注册 zstd。这里新建字典而不是原地修改，
+    # 避免污染 `tarfile.TarFile.OPEN_METH` 影响其他使用标准库的代码。
+    OPEN_METH: ClassVar[dict[str, str]] = {
+        **tarfile.TarFile.OPEN_METH,
+        "zst": "zstopen",
+    }
 
     def __init__(self, *args: Any, **kwargs: Any) -> None:
         self._progress = None
@@ -230,6 +267,71 @@ class TarFile(tarfile.TarFile):
         opened._progress = progress
         opened._progress_stream = progress_stream
         return opened
+
+    @classmethod
+    def zstopen(
+        cls,
+        name: Any,
+        mode: str = "r",
+        fileobj: Any = None,
+        level: int | None = None,
+        threads: int = -1,
+        **kwargs: Any,
+    ) -> "TarFile":
+        """打开 zstd 压缩的 tar 归档，与标准库 `xzopen` 同构。
+
+        已通过 `OPEN_METH` 注册为 `zst`，因此 `r:zst`、`w:zst`、`x:zst` 以及
+        `r:*` 自动探测都会调用到这里，无需直接使用本方法。
+
+        不支持 `|` 流式模式：标准库 `_Stream` 把压缩类型硬编码为 gz/bz2/xz，
+        无法从子类扩展，`w|zst` 会由标准库抛 `CompressionError`。
+
+        Args:
+            name: 归档路径。
+            mode: 打开模式，取 `r`、`w` 或 `x`。
+            fileobj: 可选的已打开二进制文件对象。
+            level: zstd 压缩级别，为空时取 `ZSTD_DEFAULT_LEVEL`。
+            threads: 压缩线程数，`-1` 表示使用全部核心，`0` 表示单线程。
+
+        Returns:
+            已打开的归档对象。
+
+        Raises:
+            ValueError: `mode` 不是 `r`、`w` 或 `x`。
+            tarfile.CompressionError: 未安装 `zstandard`。
+            tarfile.ReadError: 读取时数据不是 zstd 格式。
+        """
+        if mode not in ("r", "w", "x"):
+            raise ValueError("mode must be 'r', 'w' or 'x'")
+
+        try:
+            import zstandard
+        except ImportError:
+            raise tarfile.CompressionError(
+                "zstandard module is not available; install funfile[zstd]"
+            ) from None
+
+        if mode == "r":
+            compressed = zstandard.open(fileobj or name, "rb")
+        else:
+            cctx = zstandard.ZstdCompressor(
+                level=ZSTD_DEFAULT_LEVEL if level is None else level,
+                threads=threads,
+            )
+            compressed = zstandard.open(fileobj or name, f"{mode}b", cctx=cctx)
+
+        try:
+            archive = cls.taropen(name, mode, compressed, **kwargs)
+        except (zstandard.ZstdError, EOFError) as exc:
+            compressed.close()
+            if mode == "r":
+                raise tarfile.ReadError("not a zstd file") from exc
+            raise
+        except Exception:
+            compressed.close()
+            raise
+        archive._extfileobj = False
+        return archive
 
     def addfile(self, tarinfo: tarfile.TarInfo, fileobj: Any = None) -> None:
         """添加成员，并在读取文件对象时更新进度。"""
@@ -379,19 +481,38 @@ open = TarFile.open
 def file_entar(
     src_path: str | os.PathLike[str],
     dst_path: str | os.PathLike[str] | None = None,
+    codec: str = "xz",
 ) -> str:
-    """将文件或目录压缩为 xz tar 归档。
+    """将文件或目录压缩为 tar 归档。
+
+    默认仍用 `xz`，保证既有调用方拿到的归档路径和格式不变；追求速度时传
+    `codec="zst"`。实测 36MB 混合语料端到端：压缩 17.1s 降到 1.1s，解压
+    0.27s 降到 0.07s，归档体积大约 5%。解压侧收益小于压缩侧，是因为写盘
+    已经成为瓶颈。
 
     Args:
         src_path: 源文件或目录路径。
-        dst_path: 目标归档路径；默认在源路径后加 `.tar.xz`。
+        dst_path: 目标归档路径；默认在源路径后加 `codec` 对应的后缀。
+        codec: 压缩算法，取 `tar`（不压缩）、`gz`、`bz2`、`xz` 或 `zst`。
+            `zst` 需要安装 `funfile[zstd]`。
 
     Returns:
         目标归档路径。
+
+    Raises:
+        ValueError: `codec` 不受支持。
     """
+    if codec not in CODEC_SUFFIXES:
+        supported = "、".join(CODEC_SUFFIXES)
+        raise ValueError(f"unsupported codec: {codec}; 可选 {supported}")
     src_path = os.fspath(src_path)
-    dst_path = os.fspath(dst_path) if dst_path is not None else f"{src_path}.tar.xz"
-    with tar_open(dst_path, "w:xz") as archive:
+    dst_path = (
+        os.fspath(dst_path)
+        if dst_path is not None
+        else f"{src_path}{CODEC_SUFFIXES[codec]}"
+    )
+    mode = "w" if codec == "tar" else f"w:{codec}"
+    with tar_open(dst_path, mode) as archive:
         archive.add(src_path, arcname=os.path.basename(src_path))
     return dst_path
 
